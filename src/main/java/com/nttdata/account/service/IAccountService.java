@@ -29,4 +29,11 @@ public interface IAccountService {
 
     Flux<Transaction> getTransactions2(String customerId, String productId);
 
+    Mono<Account> getByAccountNumber(String accountNumber);
+
+    Mono<Account> createVip(Account account);
+
+    Mono<Account> createPyme(Account account);
+
+
 }

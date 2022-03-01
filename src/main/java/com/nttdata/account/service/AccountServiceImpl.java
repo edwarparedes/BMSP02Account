@@ -1,18 +1,22 @@
 package com.nttdata.account.service;
 
+import com.mongodb.MongoWriteException;
 import com.nttdata.account.entity.Account;
 import com.nttdata.account.model.Customer;
 import com.nttdata.account.model.Product;
 import com.nttdata.account.model.Transaction;
 import com.nttdata.account.repository.IAccountRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class AccountServiceImpl implements IAccountService {
@@ -37,66 +41,14 @@ public class AccountServiceImpl implements IAccountService {
     public Mono<Account> save(Account account) {
 
         account.setCreationTime(LocalDateTime.now());
+        account.setCustomerProfile("General");
+
         Mono<Account> accountMono = repository.findByCustomerIdAndProductId(account.getCustomerId(), account.getProductId());
         Mono<Customer> customerMono = getCustomer(account.getCustomerId());
         Mono<Product> productMono = getProduct(account.getProductId());
 
-        /*return productMono.flatMap(p -> {
-            //accountMono.flatMap(a -> {
-                if(p.getType().equalsIgnoreCase("Saving")){
-                    //throw new RuntimeException("Cuenta de ahorros");
-                    return repository.save(account);
-                }else
-                    throw new RuntimeException("Cuenta corriente");
-                    //return null;
-            //});
-        });*/
-
-        /*return customerMono.doOnNext(c1 -> {
-            if(c1.getType().equalsIgnoreCase("Business")) {
-                throw new RuntimeException("El cliente es Empresarial");
-            }
-        }).flatMap(c -> {
-            return productMono.doOnNext(p -> {
-                // Acá poner restricciones para producto (Opcional)
-            }).flatMap(p2 -> {
-                return accountMono.doOnNext(a -> {
-
-                    getProduct(a.getProductId()).flatMap( ap -> {
-                        throw new RuntimeException("El cliente ya cuenta con ese producto ...");
-                    }).switchIfEmpty(repository.save(account));
-
-                    //throw new RuntimeException("El cliente ya cuenta con ese producto ..."+ getProduct(a.getProductId()).doOnNext( ap -> ap.getType()));
-                }).switchIfEmpty(repository.save(account));
-            });
-        });*/
-
-
-        /*return customerMono.doOnNext(c1 -> {
-            if(c1.getType().equalsIgnoreCase("Business")) {
-                throw new RuntimeException("El cliente es Empresarial");
-            }
-
-        }).filter(fc -> {
-            return fc.getType().equalsIgnoreCase("Personal");
-
-        }).flatMap(c -> {
-            return productMono.doOnNext(p -> {
-                // Acá poner restricciones para producto (Opcional)
-            }).flatMap(p2 -> {
-                return accountMono.doOnNext(a -> {
-
-
-                }).flatMap(am -> {
-                    return getProduct(am.getProductId()).doOnNext( ap -> {
-                        throw new RuntimeException("El cliente ya cuenta con ese producto de tipo " + ap.getType());
-                    }).flatMap(pa -> {
-                        return repository.save(account);
-                    });
-
-                }).switchIfEmpty(repository.save(account));
-            });
-        });*/
+        if(account.getBalance() < 0 )
+            throw new RuntimeException("The minimum opening amount must be greater than or equal to 0");
 
         return customerMono.doOnNext(c1 -> {
         }).flatMap(c -> {
@@ -187,4 +139,62 @@ public class AccountServiceImpl implements IAccountService {
             return getTransactions(c.getId());
         });
     }
+
+    @Override
+    public Mono<Account> getByAccountNumber(String accountNumber) {
+        return repository.findByAccountNumber(accountNumber);
+    }
+
+    @Override
+    public Mono<Account> createVip(Account account) {
+        account.setCreationTime(LocalDateTime.now());
+        account.setCustomerProfile("Vip");
+
+        Flux<Product> productFlux = getAll().filter(a -> {
+            return a.getCustomerId().equalsIgnoreCase(account.getCustomerId());
+        }).flatMap(b -> {
+            return getProduct(b.getProductId()).filter(c -> {
+                return c.getType().equalsIgnoreCase("Credit");
+            });
+        });
+
+        return productFlux
+                .collectList()
+                .flatMap(s ->
+                        s.size()>0
+                                ? repository.save(account)
+                                : Mono.error(new RuntimeException("El cliente no tiene ningún credito!")));
+
+//        return productFlux
+//                .collectList()
+//                .flatMap(s -> {
+//                    if(s.size() > 0){
+//                        return repository.save(account);
+//                    }else
+//                        return Mono.error(new RuntimeException("El cliente no tiene ningún credito!"));
+//                });
+
+    }
+
+    @Override
+    public Mono<Account> createPyme(Account account) {
+        account.setCreationTime(LocalDateTime.now());
+        account.setCustomerProfile("Pyme");
+
+        Flux<Product> productFlux = getAll().filter(a -> {
+            return a.getCustomerId().equalsIgnoreCase(account.getCustomerId());
+        }).flatMap(b -> {
+            return getProduct(b.getProductId()).filter(c -> {
+                return c.getType().equalsIgnoreCase("Credit");
+            });
+        });
+
+        return productFlux
+                .collectList()
+                .flatMap(s ->
+                        s.size()>0
+                                ? repository.save(account)
+                                : Mono.error(new RuntimeException("El cliente no tiene ningún credito!")));
+    }
+
 }

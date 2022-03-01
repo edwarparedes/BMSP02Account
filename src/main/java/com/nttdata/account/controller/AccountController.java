@@ -1,11 +1,13 @@
 package com.nttdata.account.controller;
 
+import com.mongodb.MongoWriteException;
 import com.nttdata.account.entity.Account;
 import com.nttdata.account.model.Customer;
 import com.nttdata.account.model.Product;
 import com.nttdata.account.model.Transaction;
 import com.nttdata.account.service.IAccountService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
@@ -70,5 +72,21 @@ public class AccountController {
         return service.getTransactions2(customerId, productId);
     }
 
+    @GetMapping("accountnumber/{accountNumber}")
+    public Mono<ResponseEntity<Account>> getByAccountNumber(@PathVariable("accountNumber") String accountNumber){
+        return service.getByAccountNumber(accountNumber)
+                .map(savedMessage -> ResponseEntity.ok(savedMessage))
+                .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/vip")
+    public Mono<Account> createVip(@RequestBody Account account){
+        return service.createVip(account);
+    }
+
+    @PostMapping("/pyme")
+    public Mono<Account> createPyme(@RequestBody Account account){
+        return service.createPyme(account);
+    }
 
 }
